@@ -11,6 +11,7 @@ services:
       context: .                    # Build context is the project root
       dockerfile: app-ml/Dockerfile # Use the ML app's Dockerfile
     command: ["python", "entrypoint/train.py"]  # Run the training script
+    restart: "no"
     volumes:
       # Mount shared folders so data persists between container restarts
       - ./data:/data               # Training and production data
@@ -26,7 +27,8 @@ services:
     build:
       context: .                    # Build context is the project root
       dockerfile: app-ml/Dockerfile # Use the ML app's Dockerfile
-    command: ["python", "entrypoint/inference_api.py"]  # Run the inference API
+    # command: ["python", "entrypoint/inference_api.py"]
+    command: ["sh", "-c", "until [ -f /models/prod/latest_model.cbm ]; do echo 'Waiting for model...'; sleep 5; done && python entrypoint/inference_api.py"]
     ports:
       - "5001:5001"                # Expose port 5001 for API calls
     volumes:
@@ -36,7 +38,13 @@ services:
       - ./models:/models           # Access to trained models
       # - ./common:/common           # Shared utility functions
     depends_on:
-      - app-ml-train               # Wait for training to complete first
+      - app-ml-train              # Wait for training to complete first
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   # =============================================================================
   # WEB USER INTERFACE SERVICE
@@ -60,7 +68,8 @@ services:
       - ./models:/models           # Model metadata (if needed)
       # - ./common:/common           # Shared utility functions
     depends_on:
-      - app-ml-inference-api       # Wait for inference API to be ready
+      app-ml-inference-api:
+        condition: service_healthy       # Wait for inference API to be ready
 
 # =============================================================================
 # DOCKER COMPOSE EXPLANATION

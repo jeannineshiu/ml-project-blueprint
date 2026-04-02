@@ -117,7 +117,7 @@ class DataManager:
     @staticmethod
     def save_data(data: pd.DataFrame, path: str) -> None:
         """
-        Save a DataFrame to a CSV file.
+        Save a DataFrame to a parquet file.
 
         Args:
             data (pd.DataFrame): Data to be saved.
@@ -148,14 +148,14 @@ class DataManager:
         # Determine whether to overwrite or append
         if os.path.exists(prediction_path):
             if current_timestamp == pd.to_datetime(self.config['pipeline_runner']['first_timestamp']):
-                # Start fresh for first timestamp
                 combined_df = df_pred
             else:
-                # Append to existing predictions
-                existing_pred_df = pd.read_parquet(prediction_path)
-                combined_df = pd.concat([existing_pred_df, df_pred], ignore_index=True)
+                try:
+                    existing_pred_df = pd.read_parquet(prediction_path)
+                    combined_df = pd.concat([existing_pred_df, df_pred], ignore_index=True)
+                except Exception:
+                    combined_df = df_pred
         else:
-            # File doesn't exist yet
             combined_df = df_pred
 
         # Save final DataFrame
@@ -185,6 +185,8 @@ class DataManager:
             self.config['data_manager']['prod_data_folder'],
             self.config['data_manager']['real_time_prediction_data_name']
         )
+        if not os.path.exists(prediction_path):
+            return pd.DataFrame()
         df = self.load_data(prediction_path)
         df['datetime'] = pd.to_datetime(df['datetime'])
         return df 
